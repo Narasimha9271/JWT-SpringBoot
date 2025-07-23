@@ -1,16 +1,19 @@
 package com.security.jwt.controller;
 
-import com.security.jwt.entity.AuthRequest;
 import com.security.jwt.entity.UserInfo;
 import com.security.jwt.service.JwtService;
 import com.security.jwt.service.UserInfoService;
 
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.*;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
@@ -26,30 +29,40 @@ public class UserController {
         return "Welcome! This endpoint is not secure.";
     }
 
+
     @PostMapping("/addNewUser")
-    public String addNewUser(@RequestBody UserInfo userInfo) {
-        return userInfoService.addUser(userInfo);
+    public ResponseEntity<?> addNewUser(@RequestBody UserInfo userInfo) {
+        // Save user
+        userInfoService.addUser(userInfo);
+
+        // Generate token after user creation
+        String token = jwtService.generateToken(userInfo.getName());
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("jwtToken", token);
+        response.put("username", userInfo.getName());
+        response.put("roles", userInfo.getRoles());
+        return ResponseEntity.ok(response);
+
     }
-
-    @PostMapping("/generateToken")
-    public String authenticateAndGetToken(@RequestBody AuthRequest authRequest) {
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(authRequest.getUsername(), authRequest.getPassword())
-        );
-
-        if (authentication.isAuthenticated()) {
-            return jwtService.generateToken(authRequest.getUsername());
-        } else {
-            throw new UsernameNotFoundException("Invalid user request!");
-        }
-    }
-
 
 
     @GetMapping("/user/userProfile")
-    public String userProfile() {
-        return "Welcome to the User Profile!";
+    public ResponseEntity<String> userProfile(HttpServletRequest request) {
+        // Extract the Authorization header
+        String authHeader = request.getHeader("Authorization");
+
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String jwt = authHeader.substring(7); // Remove "Bearer " prefix
+
+            String username = jwtService.extractUsername(jwt);
+
+            return ResponseEntity.ok("Welcome " + username);
+        }
+
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid Token");
     }
+
 
     @GetMapping("/admin/adminProfile")
     public String adminProfile() {
